@@ -9,8 +9,6 @@ import sys
 import sysconfig
 from collections import OrderedDict
 
-from pip._vendor.six import PY2
-
 import pip._internal.utils.glibc
 from pip._internal.utils.typing import MYPY_CHECK_RUNNING
 
@@ -429,7 +427,8 @@ def get_supported(
     if abi:
         abis[0:0] = [abi]
 
-    supports_abi3 = not PY2 and impl == "cp"
+    # abi3 was introduced in Python 3.2
+    supports_abi3 = version_info[:2] >= (3, 2) and impl == "cp"
 
     if supports_abi3:
         abis.append("abi3")
