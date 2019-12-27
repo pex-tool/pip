@@ -45,16 +45,16 @@ class TestTargetPython:
         ({}, ''),
         (dict(py_version_info=(3, 6)), "version_info='3.6'"),
         (
-            dict(platform='darwin', py_version_info=(3, 6)),
-            "platform='darwin' version_info='3.6'",
+            dict(platforms=['darwin'], py_version_info=(3, 6)),
+            "platforms=['darwin'] version_info='3.6'",
         ),
         (
             dict(
-                platform='darwin', py_version_info=(3, 6), abi='cp36m',
+                platforms=['darwin'], py_version_info=(3, 6), abi='cp36m',
                 implementation='cp'
             ),
             (
-                "platform='darwin' version_info='3.6' abi='cp36m' "
+                "platforms=['darwin'] version_info='3.6' abi='cp36m' "
                 "implementation='cp'"
             ),
         ),
@@ -64,29 +64,27 @@ class TestTargetPython:
         actual = target_python.format_given()
         assert actual == expected
 
-    @pytest.mark.parametrize('py_version_info, expected_version', [
-        ((), ''),
-        ((2, ), '2'),
-        ((3, ), '3'),
-        ((3, 7), '37'),
-        ((3, 7, 3), '37'),
+    @pytest.mark.parametrize('py_version_info', [
+        ((), ),
+        ((2, ), ),
+        ((3, ), ),
+        ((3, 7), ),
+        ((3, 7, 3), ),
         # Check a minor version with two digits.
-        ((3, 10, 1), '310'),
+        ((3, 10, 1), ),
         # Check that versions=None is passed to get_tags().
-        (None, None),
+        (None, ),
     ])
     @patch('pip._internal.models.target_python.get_supported')
-    def test_get_tags(
-        self, mock_get_supported, py_version_info, expected_version,
-    ):
+    def test_get_tags(self, mock_get_supported, py_version_info):
         mock_get_supported.return_value = ['tag-1', 'tag-2']
 
         target_python = TargetPython(py_version_info=py_version_info)
         actual = target_python.get_tags()
         assert actual == ['tag-1', 'tag-2']
 
-        actual = mock_get_supported.call_args[1]['version']
-        assert actual == expected_version
+        actual = mock_get_supported.call_args[1]['version_info']
+        assert actual == py_version_info
 
         # Check that the value was cached.
         assert target_python._valid_tags == ['tag-1', 'tag-2']

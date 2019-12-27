@@ -99,7 +99,7 @@ def check_dist_restriction(options, check_target=False):
     """
     dist_restriction_set = any([
         options.python_version,
-        options.platform,
+        options.platforms,
         options.abi,
         options.implementation,
     ])
@@ -491,11 +491,13 @@ def only_binary():
 platform = partial(
     Option,
     '--platform',
-    dest='platform',
+    dest='platforms',
     metavar='platform',
+    action='append',
     default=None,
     help=("Only use wheels compatible with <platform>. "
-          "Defaults to the platform of the running system."),
+          "Defaults to the platform of the running system. "
+          "This option can be used multiple times."),
 )  # type: Callable[..., Option]
 
 
@@ -605,7 +607,7 @@ def add_target_python_options(cmd_opts):
 def make_target_python(options):
     # type: (Values) -> TargetPython
     target_python = TargetPython(
-        platform=options.platform,
+        platforms=options.platforms,
         py_version_info=options.python_version,
         abi=options.abi,
         implementation=options.implementation,
