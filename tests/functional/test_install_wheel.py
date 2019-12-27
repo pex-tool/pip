@@ -472,3 +472,22 @@ def test_wheel_install_fails_with_unrelated_dist_info(script):
         "'simple-0.1.0.dist-info' does not start with 'unrelated'"
         in result.stderr
     )
+
+
+def test_wheel_install_succeeds_with_nested_dist_info(script):
+    package = create_basic_wheel_for_package(
+        script,
+        "simple",
+        "0.1.0",
+        extra_files={
+            "simple/_vendor/unrelated-2.0.0.dist-info/WHEEL": (
+                "Wheel-Version: 1.0"
+            ),
+            "simple/_vendor/unrelated-2.0.0.dist-info/METADATA": (
+                "Name: unrelated\nVersion: 2.0.0\n"
+            ),
+        },
+    )
+    script.pip(
+        "install", "--no-cache-dir", "--no-index", package, expect_error=False
+    )
