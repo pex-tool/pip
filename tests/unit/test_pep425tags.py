@@ -15,21 +15,6 @@ def test_format_tag(file_tag, expected):
     assert actual == expected
 
 
-@pytest.mark.parametrize('version_info, expected', [
-    ((2,), '2'),
-    ((2, 8), '28'),
-    ((3,), '3'),
-    ((3, 6), '36'),
-    # Test a tuple of length 3.
-    ((3, 6, 5), '36'),
-    # Test a 2-digit minor version.
-    ((3, 10), '310'),
-])
-def test_version_info_to_nodot(version_info, expected):
-    actual = pep425tags.version_info_to_nodot(version_info)
-    assert actual == expected
-
-
 class TestPEP425Tags(object):
 
     def mock_get_config_var(self, **kwd):
@@ -244,7 +229,7 @@ class TestManylinux2010Tags(object):
         Specifying manylinux2010 implies manylinux1.
         """
         groups = {}
-        supported = pep425tags.get_supported(platform=manylinux2010)
+        supported = pep425tags.get_supported(platforms=[manylinux2010])
         for pyimpl, abi, arch in supported:
             groups.setdefault((pyimpl, abi), []).append(arch)
 
@@ -294,7 +279,7 @@ class TestManylinux2014Tags(object):
         Specifying manylinux2014 implies manylinux2010/manylinux1.
         """
         groups = {}
-        supported = pep425tags.get_supported(platform=manylinuxA)
+        supported = pep425tags.get_supported(platforms=[manylinuxA])
         for pyimpl, abi, arch in supported:
             groups.setdefault((pyimpl, abi), []).append(arch)
 

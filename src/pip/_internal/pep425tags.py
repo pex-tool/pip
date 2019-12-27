@@ -16,7 +16,7 @@ from pip._internal.utils.typing import MYPY_CHECK_RUNNING
 
 if MYPY_CHECK_RUNNING:
     from typing import (
-        Tuple, Callable, List, Optional, Union, Dict
+        Callable, Dict, Iterable, Iterator, List, Optional, Set, Tuple, Union
     )
 
     Pep425Tag = Tuple[str, str, str]
@@ -55,12 +55,6 @@ def get_abbr_impl():
 
 
 interpreter_name = get_abbr_impl
-
-
-def version_info_to_nodot(version_info):
-    # type: (Tuple[int, ...]) -> str
-    # Only use up to the first two numbers.
-    return ''.join(map(str, version_info[:2]))
 
 
 def get_impl_ver():
@@ -318,8 +312,15 @@ def get_darwin_arches(major, minor, machine):
     return arches
 
 
-def get_all_minor_versions_as_strings(version_info):
-    # type: (Tuple[int, ...]) -> List[str]
+def get_all_minor_versions_as_strings(impl, version_info):
+    # type: (str, Tuple[int, ...]) -> List[str]
+    if len(version_info) == 1:
+        return [str(version_info[0])]
+
+    # PyPy is handled specially, see: get_impl_version_info.
+    if impl != 'pp':
+        version_info = version_info[:2]
+
     versions = []
     major = version_info[:-1]
     # Support all previous minor Python versions.
@@ -366,19 +367,46 @@ def _custom_manylinux_platforms(arch):
     return arches
 
 
+class _UniquedStrSequence(object):
+    def __init__(
+        self,
+        items=None,  # type: Optional[List[str]]
+    ):
+        # type: (...) -> None
+        self._seen = set()  # type: Set[str]
+        self._sequence = []  # type: List[str]
+        if items:
+            self.extend(items)
+
+    def append(self, item):
+        # type: (str) -> None
+        if item not in self._seen:
+            self._seen.add(item)
+            self._sequence.append(item)
+
+    def extend(self, items):
+        # type: (Iterable[str]) -> None
+        for item in items:
+            self.append(item)
+
+    def __iter__(self):
+        # type: () -> Iterator[str]
+        return iter(self._sequence)
+
+
 def get_supported(
-    version=None,  # type: Optional[str]
-    platform=None,  # type: Optional[str]
+    version_info=None,  # type: Optional[Tuple[int, ...]]
+    platforms=None,  # type: Optional[List[str]]
     impl=None,  # type: Optional[str]
     abi=None  # type: Optional[str]
 ):
     # type: (...) -> List[Pep425Tag]
-    """Return a list of supported tags for each version specified in
-    `versions`.
+    """Return a list of supported tags for the given constraints.
 
-    :param version: a string version, of the form "33" or "32",
-        or None. The version will be assumed to support our ABI.
-    :param platform: specify the exact platform you want valid
+    :param version_info: a version tuple or None. If None, the local
+        interpreter version. The version will be assumed to support
+        our ABI.
+    :param platforms: specify the exact platforms you want valid
         tags for, or None. If None, use the local system platform.
     :param impl: specify the exact implementation you want valid
         tags for, or None. If None, use the local interpreter impl.
@@ -387,16 +415,13 @@ def get_supported(
     """
     supported = []
 
+    impl = impl or get_abbr_impl()
+
     # Versions must be given with respect to the preference
-    if version is None:
-        version_info = get_impl_version_info()
-        versions = get_all_minor_versions_as_strings(version_info)
-    else:
-        versions = [version]
+    version_info = version_info or get_impl_version_info()
+    versions = get_all_minor_versions_as_strings(impl, version_info)
     current_version = versions[0]
     other_versions = versions[1:]
-
-    impl = impl or get_abbr_impl()
 
     abis = []  # type: List[str]
 
@@ -411,23 +436,23 @@ def get_supported(
 
     abis.append('none')
 
-    arch = platform or get_platform()
-    arch_prefix, arch_sep, arch_suffix = arch.partition('_')
-    if arch.startswith('macosx'):
-        arches = _mac_platforms(arch)
-    elif arch_prefix in ['manylinux2014', 'manylinux2010']:
-        arches = _custom_manylinux_platforms(arch)
-    elif platform is None:
-        arches = []
-        if is_manylinux2014_compatible():
-            arches.append('manylinux2014' + arch_sep + arch_suffix)
-        if is_manylinux2010_compatible():
-            arches.append('manylinux2010' + arch_sep + arch_suffix)
-        if is_manylinux1_compatible():
-            arches.append('manylinux1' + arch_sep + arch_suffix)
-        arches.append(arch)
-    else:
-        arches = [arch]
+    arches = _UniquedStrSequence()
+    for arch in _UniquedStrSequence(platforms or [get_platform()]):
+        arch_prefix, arch_sep, arch_suffix = arch.partition('_')
+        if arch.startswith('macosx'):
+            arches.extend(_mac_platforms(arch))
+        elif arch_prefix in ['manylinux2014', 'manylinux2010']:
+            arches.extend(_custom_manylinux_platforms(arch))
+        elif not platforms:
+            if is_manylinux2014_compatible():
+                arches.append('manylinux2014' + arch_sep + arch_suffix)
+            if is_manylinux2010_compatible():
+                arches.append('manylinux2010' + arch_sep + arch_suffix)
+            if is_manylinux1_compatible():
+                arches.append('manylinux1' + arch_sep + arch_suffix)
+            arches.append(arch)
+        else:
+            arches.append(arch)
 
     # Current version, current API (built specifically for our Python):
     for abi in abis:
