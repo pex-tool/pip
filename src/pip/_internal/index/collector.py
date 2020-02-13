@@ -321,7 +321,14 @@ def _make_html_page(response):
     return HTMLPage(response.content, encoding=encoding, url=response.url)
 
 
+_get_html_page_cache = {} # type: Dict[Link, HTMLPage]
+
+
 def _get_html_page(link, session=None):
+    maybe_cache_entry = _get_html_page_cache.get(link, None)
+    if maybe_cache_entry is not None:
+        return maybe_cache_entry
+
     # type: (Link, Optional[PipSession]) -> Optional[HTMLPage]
     if session is None:
         raise TypeError(
@@ -371,7 +378,9 @@ def _get_html_page(link, session=None):
     except requests.Timeout:
         _handle_get_page_fail(link, "timed out")
     else:
-        return _make_html_page(resp)
+        page = _make_html_page(resp)
+        _get_html_page_cache[link] = page
+        return page
     return None
 
 
