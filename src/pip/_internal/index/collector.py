@@ -8,6 +8,7 @@ import logging
 import mimetypes
 import os
 from collections import OrderedDict
+from functools import lru_cache
 
 from pip._vendor import html5lib, requests
 from pip._vendor.distlib.compat import unescape
@@ -244,18 +245,34 @@ def _create_link_from_element(
     return link
 
 
-_parse_links_cache = {}  # type: Dict[Tuple[bytes, Optional[str]], List[Link]]
+class CacheablePage(object):
+    def __init__(self, page):
+        self.page = page
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.page.url == other.page.url
+
+    def __hash__(self):
+        return hash(self.page.url)
 
 
+def with_cached_html_pages(fn):
+    @lru_cache(maxsize=None)
+    def wrapper(cacheable_page):
+        return list(fn(cacheable_page.page))
+
+    def wrapper_wrapper(page):
+        return wrapper(CacheablePage(page))
+
+    return wrapper_wrapper
+
+
+@with_cached_html_pages
 def parse_links(page):
     # type: (HTMLPage) -> Iterable[Link]
     """
     Parse an HTML document, and yield its anchor elements as Link objects.
     """
-    cache_key = (page.content, page.encoding)
-    maybe_cache_entry = _parse_links_cache.get(cache_key, None)
-    if maybe_cache_entry is not None:
-        return maybe_cache_entry
 
     document = html5lib.parse(
         page.content,
@@ -274,11 +291,7 @@ def parse_links(page):
         )
         if link is None:
             continue
-        all_links.append(link)
-
-    _parse_links_cache[cache_key] = all_links
-
-    return all_links
+        yield link
 
 
 class HTMLPage(object):

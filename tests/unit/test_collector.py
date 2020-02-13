@@ -286,15 +286,16 @@ def test_parse_links_caches_same_page():
     )
     html_bytes = html.encode('utf-8')
 
+    # The caching is only keyed on having the same `url`.
     page_1 = HTMLPage(
         html_bytes,
         encoding=None,
-        url='https://example-1.com/simple1/',
+        url='https://example.com/simple/',
     )
     page_2 = HTMLPage(
         html_bytes,
         encoding=None,
-        url='https://example-2.com/simple2/',
+        url='https://example.com/simple/',
     )
 
     mock_parse = mock.patch("pip._internal.index.collector.html5lib.parse")
