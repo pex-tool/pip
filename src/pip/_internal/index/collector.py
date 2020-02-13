@@ -24,8 +24,8 @@ from pip._internal.vcs import is_url, vcs
 
 if MYPY_CHECK_RUNNING:
     from typing import (
-        Callable, Iterable, List, MutableMapping, Optional, Sequence, Tuple,
-        Union,
+        Callable, Dict, Iterable, List, MutableMapping, Optional, Sequence,
+        Tuple, Union,
     )
     import xml.etree.ElementTree
 
@@ -244,7 +244,7 @@ def _create_link_from_element(
     return link
 
 
-_parse_links_cache = {}
+_parse_links_cache = {}  # type: Dict[Tuple[bytes, Optional[str]], List[Link]]
 
 
 def parse_links(page):

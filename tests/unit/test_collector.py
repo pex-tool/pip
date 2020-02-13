@@ -297,7 +297,8 @@ def test_parse_links_caches_same_page():
         url='https://example-2.com/simple2/',
     )
 
-    with mock.patch("pip._internal.index.collector.html5lib.parse") as mock_parse:
+    mock_parse = mock.patch("pip._internal.index.collector.html5lib.parse")
+    with mock_parse:
         mock_parse.return_value = html5lib.parse(
             page_1.content,
             transport_encoding=page_1.encoding,
@@ -306,7 +307,7 @@ def test_parse_links_caches_same_page():
         parsed_links_1 = list(parse_links(page_1))
         mock_parse.assert_called()
 
-    with mock.patch("pip._internal.index.collector.html5lib.parse") as mock_parse:
+    with mock_parse:
         parsed_links_2 = list(parse_links(page_2))
         assert parsed_links_2 == parsed_links_1
         mock_parse.assert_not_called()
