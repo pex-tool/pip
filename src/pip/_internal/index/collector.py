@@ -8,7 +8,23 @@ import logging
 import mimetypes
 import os
 from collections import OrderedDict
-from functools import lru_cache
+
+try:
+    from functools import lru_cache
+except ImportError:
+    # Only works for single-argument functions.
+    def lru_cache(*args, **kwargs):
+        cache = {}
+        def wrapper(fn):
+            def wrapped(arg):
+                value = cache.get(arg, None)
+                if value is not None:
+                    return value
+                value = fn(arg)
+                cache[arg] = value
+                return value
+            return wrapped
+        return wrapper
 
 from pip._vendor import html5lib, requests
 from pip._vendor.distlib.compat import unescape
@@ -273,7 +289,6 @@ def parse_links(page):
     """
     Parse an HTML document, and yield its anchor elements as Link objects.
     """
-
     document = html5lib.parse(
         page.content,
         transport_encoding=page.encoding,
@@ -282,7 +297,6 @@ def parse_links(page):
 
     url = page.url
     base_url = _determine_base_url(document, url)
-    all_links = []
     for anchor in document.findall(".//a"):
         link = _create_link_from_element(
             anchor,

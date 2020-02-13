@@ -290,12 +290,12 @@ def test_parse_links_caches_same_page():
     page_1 = HTMLPage(
         html_bytes,
         encoding=None,
-        url='https://example.com/simple/',
+        url='https://example.com/some-find-links-url/',
     )
     page_2 = HTMLPage(
         html_bytes,
         encoding=None,
-        url='https://example.com/simple/',
+        url='https://example.com/some-find-links-url/',
     )
 
     mock_parse = mock.patch("pip._internal.index.collector.html5lib.parse")
