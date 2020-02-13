@@ -9,6 +9,19 @@ import mimetypes
 import os
 from collections import OrderedDict
 
+from pip._vendor import html5lib, requests
+from pip._vendor.distlib.compat import unescape
+from pip._vendor.requests.exceptions import HTTPError, RetryError, SSLError
+from pip._vendor.six.moves.urllib import parse as urllib_parse
+from pip._vendor.six.moves.urllib import request as urllib_request
+
+from pip._internal.models.link import Link
+from pip._internal.utils.filetypes import ARCHIVE_EXTENSIONS
+from pip._internal.utils.misc import redact_auth_from_url
+from pip._internal.utils.typing import MYPY_CHECK_RUNNING
+from pip._internal.utils.urls import path_to_url, url_to_path
+from pip._internal.vcs import is_url, vcs
+
 try:
     from functools import lru_cache
 except ImportError:
@@ -26,18 +39,6 @@ except ImportError:
             return wrapped
         return wrapper
 
-from pip._vendor import html5lib, requests
-from pip._vendor.distlib.compat import unescape
-from pip._vendor.requests.exceptions import HTTPError, RetryError, SSLError
-from pip._vendor.six.moves.urllib import parse as urllib_parse
-from pip._vendor.six.moves.urllib import request as urllib_request
-
-from pip._internal.models.link import Link
-from pip._internal.utils.filetypes import ARCHIVE_EXTENSIONS
-from pip._internal.utils.misc import redact_auth_from_url
-from pip._internal.utils.typing import MYPY_CHECK_RUNNING
-from pip._internal.utils.urls import path_to_url, url_to_path
-from pip._internal.vcs import is_url, vcs
 
 if MYPY_CHECK_RUNNING:
     from typing import (
@@ -261,15 +262,17 @@ def _create_link_from_element(
     return link
 
 
-class CacheablePage(object):
+class CacheablePageContent(object):
     def __init__(self, page):
         self.page = page
 
     def __eq__(self, other):
-        return isinstance(other, type(self)) and self.page.url == other.page.url
+        return (isinstance(other, type(self)) and
+                self.page.content == other.page.content and
+                self.page.encoding == other.page.encoding)
 
     def __hash__(self):
-        return hash(self.page.url)
+        return hash((self.page.content, self.page.encoding))
 
 
 def with_cached_html_pages(fn):
@@ -278,7 +281,7 @@ def with_cached_html_pages(fn):
         return list(fn(cacheable_page.page))
 
     def wrapper_wrapper(page):
-        return wrapper(CacheablePage(page))
+        return wrapper(CacheablePageContent(page))
 
     return wrapper_wrapper
 
@@ -348,14 +351,16 @@ def _make_html_page(response):
     return HTMLPage(response.content, encoding=encoding, url=response.url)
 
 
-_get_html_page_cache = {} # type: Dict[Link, HTMLPage]
+def with_cached_link_fetch(fn):
+    @lru_cache(maxsize=None)
+    def wrapper(link, session=None):
+        return fn(link, session=session)
+
+    return wrapper
 
 
+@with_cached_link_fetch
 def _get_html_page(link, session=None):
-    maybe_cache_entry = _get_html_page_cache.get(link, None)
-    if maybe_cache_entry is not None:
-        return maybe_cache_entry
-
     # type: (Link, Optional[PipSession]) -> Optional[HTMLPage]
     if session is None:
         raise TypeError(
@@ -405,9 +410,7 @@ def _get_html_page(link, session=None):
     except requests.Timeout:
         _handle_get_page_fail(link, "timed out")
     else:
-        page = _make_html_page(resp)
-        _get_html_page_cache[link] = page
-        return page
+        return _make_html_page(resp)
     return None
 
 
