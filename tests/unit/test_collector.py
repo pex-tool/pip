@@ -277,6 +277,41 @@ def test_parse_links__yanked_reason(anchor_html, expected):
     assert actual == expected
 
 
+def test_parse_links_caches_same_page():
+    html = (
+        # Mark this as a unicode string for Python 2 since anchor_html
+        # can contain non-ascii.
+        u'<html><head><meta charset="utf-8"><head>'
+        '<body><a href="/pkg1-1.0.tar.gz"></a></body></html>'
+    )
+    html_bytes = html.encode('utf-8')
+
+    page_1 = HTMLPage(
+        html_bytes,
+        encoding=None,
+        url='https://example-1.com/simple1/',
+    )
+    page_2 = HTMLPage(
+        html_bytes,
+        encoding=None,
+        url='https://example-2.com/simple2/',
+    )
+
+    with mock.patch("pip._internal.index.collector.html5lib.parse") as mock_parse:
+        mock_parse.return_value = html5lib.parse(
+            page_1.content,
+            transport_encoding=page_1.encoding,
+            namespaceHTMLElements=False,
+        )
+        parsed_links_1 = list(parse_links(page_1))
+        mock_parse.assert_called()
+
+    with mock.patch("pip._internal.index.collector.html5lib.parse") as mock_parse:
+        parsed_links_2 = list(parse_links(page_2))
+        assert parsed_links_2 == parsed_links_1
+        mock_parse.assert_not_called()
+
+
 def test_request_http_error(caplog):
     caplog.set_level(logging.DEBUG)
     link = Link('http://localhost')
