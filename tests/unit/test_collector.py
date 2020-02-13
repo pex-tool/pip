@@ -1,5 +1,6 @@
 import logging
 import os.path
+import uuid
 from textwrap import dedent
 
 import mock
@@ -269,7 +270,7 @@ def test_parse_links__yanked_reason(anchor_html, expected):
     page = HTMLPage(
         html_bytes,
         encoding=None,
-        url='https://example.com/simple/',
+        url='https://example.com/find-links-{}'.format(uuid.uuid4()),
     )
     links = list(parse_links(page))
     link, = links
