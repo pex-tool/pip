@@ -22,28 +22,10 @@ from pip._internal.utils.typing import MYPY_CHECK_RUNNING
 from pip._internal.utils.urls import path_to_url, url_to_path
 from pip._internal.vcs import is_url, vcs
 
-try:
-    from functools import lru_cache
-except ImportError:
-    # Only works for single-argument functions.
-    def lru_cache(*args, **kwargs):
-        cache = {}
-        def wrapper(fn):
-            def wrapped(arg):
-                value = cache.get(arg, None)
-                if value is not None:
-                    return value
-                value = fn(arg)
-                cache[arg] = value
-                return value
-            return wrapped
-        return wrapper
-
-
 if MYPY_CHECK_RUNNING:
     from typing import (
-        Callable, Dict, Iterable, List, MutableMapping, Optional, Sequence,
-        Tuple, Union,
+        Any, Callable, Dict, Iterable, List, MutableMapping, Optional,
+        Sequence, Tuple, Union,
     )
     import xml.etree.ElementTree
 
@@ -57,6 +39,32 @@ if MYPY_CHECK_RUNNING:
 
 
 logger = logging.getLogger(__name__)
+
+
+def lru_cache(
+        *args,                  # type: Any
+        **kwargs                # type: Any
+):
+    # type: (...) -> Any
+    cache = {}                  # type: Dict[Any, Any]
+
+    def wrapper(fn):
+        # type: (Any) -> Any
+
+        def wrapped(
+                *args,          # type: Any
+                **kwargs        # type: Any
+        ):
+            # type: (...) -> Any
+            cache_key = tuple(args) + tuple(kwargs.items())
+            value = cache.get(cache_key, None)
+            if value is not None:
+                return value
+            value = fn(*args, **kwargs)
+            cache[cache_key] = value
+            return value
+        return wrapped
+    return wrapper
 
 
 def _match_vcs_scheme(url):
@@ -264,23 +272,30 @@ def _create_link_from_element(
 
 class CacheablePageContent(object):
     def __init__(self, page):
+        # type: (HTMLPage) -> None
         self.page = page
 
     def __eq__(self, other):
+        # type: (object) -> bool
         return (isinstance(other, type(self)) and
                 self.page.content == other.page.content and
                 self.page.encoding == other.page.encoding)
 
     def __hash__(self):
+        # type: () -> int
         return hash((self.page.content, self.page.encoding))
 
 
 def with_cached_html_pages(fn):
+    # type: (Any) -> Any
+
     @lru_cache(maxsize=None)
     def wrapper(cacheable_page):
+        # type: (CacheablePageContent) -> List[Any]
         return list(fn(cacheable_page.page))
 
     def wrapper_wrapper(page):
+        # type: (HTMLPage) -> List[Any]
         return wrapper(CacheablePageContent(page))
 
     return wrapper_wrapper
@@ -352,8 +367,11 @@ def _make_html_page(response):
 
 
 def with_cached_link_fetch(fn):
+    # type: (Any) -> Any
+
     @lru_cache(maxsize=None)
     def wrapper(link, session=None):
+        # type: (Link, Optional[PipSession]) -> Optional[HTMLPage]
         return fn(link, session=session)
 
     return wrapper
