@@ -10,6 +10,7 @@ from pip._vendor import html5lib, requests
 from pip._vendor.six.moves.urllib import request as urllib_request
 
 from pip._internal.index.collector import (
+    CacheablePageContent,
     HTMLPage,
     _clean_link,
     _determine_base_url,
@@ -277,6 +278,42 @@ def test_parse_links__yanked_reason(anchor_html, expected):
     assert actual == expected
 
 
+def test_parse_links_caches_same_page():
+    html = (
+        # Mark this as a unicode string for Python 2 since anchor_html
+        # can contain non-ascii.
+        u'<html><head><meta charset="utf-8"><head>'
+        '<body><a href="/pkg1-1.0.tar.gz"></a></body></html>'
+    )
+    html_bytes = html.encode('utf-8')
+
+    page_1 = HTMLPage(
+        html_bytes,
+        encoding=None,
+        url='https://example.com/simple/',
+    )
+    page_2 = HTMLPage(
+        html_bytes,
+        encoding=None,
+        url='https://example.com/simple/',
+    )
+
+    mock_parse = mock.patch("pip._internal.index.collector.html5lib.parse")
+    with mock_parse as mock_parse:
+        mock_parse.return_value = html5lib.parse(
+            page_1.content,
+            transport_encoding=page_1.encoding,
+            namespaceHTMLElements=False,
+        )
+        parsed_links_1 = list(parse_links(page_1))
+        mock_parse.assert_called()
+
+    with mock_parse as mock_parse:
+        parsed_links_2 = list(parse_links(page_2))
+        assert parsed_links_2 == parsed_links_1
+        mock_parse.assert_not_called()
+
+
 def test_request_http_error(caplog):
     caplog.set_level(logging.DEBUG)
     link = Link('http://localhost')
@@ -339,6 +376,25 @@ def test_get_html_page_invalid_scheme(caplog, url, vcs_scheme):
             "Cannot look at {} URL {}".format(vcs_scheme, url),
         ),
     ]
+
+
+def test_get_html_page_caches_same_link():
+    link = Link('https://example.com/link-1/')
+    session = mock.Mock(PipSession)
+
+    fake_response = make_fake_html_response(link.url)
+    mock_func = mock.patch("pip._internal.index.collector._get_html_response")
+    with mock_func as mock_func:
+        mock_func.return_value = fake_response
+        page_1 = _get_html_page(link, session=session)
+        mock_func.assert_called_once()
+
+    with mock_func as mock_func:
+        page_2 = _get_html_page(link, session=session)
+        # Assert that the result of the cached html page fetch will also then
+        # be cached by parse_links() and @with_cached_html_pages.
+        assert CacheablePageContent(page_1) == CacheablePageContent(page_2)
+        mock_func.assert_not_called()
 
 
 def make_fake_html_response(url):
