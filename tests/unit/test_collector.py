@@ -58,6 +58,7 @@ def test_get_html_response_archive_to_http_scheme(url, content_type):
     if the scheme supports it, and raise `_NotHTML` if the response isn't HTML.
     """
     session = mock.Mock(PipSession)
+    session.headers = {}
     session.head.return_value = mock.Mock(**{
         "request.method": "HEAD",
         "headers": {"Content-Type": content_type},
@@ -85,6 +86,7 @@ def test_get_html_response_archive_to_http_scheme_is_html(url):
     request is responded with text/html.
     """
     session = mock.Mock(PipSession)
+    session.headers = {}
     session.head.return_value = mock.Mock(**{
         "request.method": "HEAD",
         "headers": {"Content-Type": "text/html"},
@@ -118,6 +120,7 @@ def test_get_html_response_no_head(url):
     look like an archive, only the GET request that retrieves data.
     """
     session = mock.Mock(PipSession)
+    session.headers = {}
 
     # Mock the headers dict to ensure it is accessed.
     session.get.return_value = mock.Mock(headers=mock.Mock(**{
@@ -143,6 +146,7 @@ def test_get_html_response_dont_log_clear_text_password(caplog):
     in its DEBUG log message.
     """
     session = mock.Mock(PipSession)
+    session.headers = {}
 
     # Mock the headers dict to ensure it is accessed.
     session.get.return_value = mock.Mock(headers=mock.Mock(**{
@@ -162,6 +166,57 @@ def test_get_html_response_dont_log_clear_text_password(caplog):
     assert record.levelname == 'DEBUG'
     assert record.message.splitlines() == [
         "Getting page https://user:****@example.com/simple/",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("url", "headers", "cache_control"),
+    [
+        (
+            "http://python.org/python-3.7.1.zip",
+            {},
+            "max-age=0",
+        ),
+        (
+            "https://pypi.org/pip-18.0.tar.gz",
+            {},
+            "max-age=0",
+        ),
+        (
+            "http://python.org/python-3.7.1.zip",
+            {"Cache-Control": "max-age=1"},
+            "max-age=1",
+        ),
+        (
+            "https://pypi.org/pip-18.0.tar.gz",
+            {"Cache-Control": "max-age=1"},
+            "max-age=1",
+        ),
+    ],
+)
+def test_get_html_response_override_cache_control(url, headers, cache_control):
+    """
+    `_get_html_response()` should use the session's default value for the
+    Cache-Control header if provided.
+    """
+    session = mock.Mock(PipSession)
+    session.headers = headers
+    session.head.return_value = mock.Mock(**{
+        "request.method": "HEAD",
+        "headers": {"Content-Type": "text/html"},
+    })
+    session.get.return_value = mock.Mock(headers={"Content-Type": "text/html"})
+
+    resp = _get_html_response(url, session=session)
+
+    assert resp is not None
+    assert session.mock_calls == [
+        mock.call.head(url, allow_redirects=True),
+        mock.call.head().raise_for_status(),
+        mock.call.get(url, headers={
+            "Accept": "text/html", "Cache-Control": cache_control,
+        }),
+        mock.call.get().raise_for_status(),
     ]
 
 
@@ -318,6 +373,7 @@ def test_request_http_error(caplog):
     caplog.set_level(logging.DEBUG)
     link = Link('http://localhost')
     session = Mock(PipSession)
+    session.headers = {}
     session.get.return_value = resp = Mock()
     resp.raise_for_status.side_effect = requests.HTTPError('Http error')
     assert _get_html_page(link, session=session) is None
@@ -331,6 +387,7 @@ def test_request_retries(caplog):
     caplog.set_level(logging.DEBUG)
     link = Link('http://localhost')
     session = Mock(PipSession)
+    session.headers = {}
     session.get.side_effect = requests.exceptions.RetryError('Retry error')
     assert _get_html_page(link, session=session) is None
     assert (
@@ -422,6 +479,7 @@ def test_get_html_page_directory_append_index(tmpdir):
     expected_url = "{}/index.html".format(dir_url.rstrip("/"))
 
     session = mock.Mock(PipSession)
+    session.headers = {}
     fake_response = make_fake_html_response(expected_url)
     mock_func = mock.patch("pip._internal.index.collector._get_html_response")
     with mock_func as mock_func:
