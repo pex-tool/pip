@@ -7,13 +7,14 @@ from textwrap import dedent
 import pytest
 
 from pip._internal.cli.spinners import SpinnerInterface
-from pip._internal.exceptions import InstallationError
+from pip._internal.exceptions import InstallationSubprocessError
 from pip._internal.utils.misc import hide_value
 from pip._internal.utils.subprocess import (
     call_subprocess,
     format_command_args,
     make_command,
     make_subprocess_output_error,
+    subprocess_logger,
 )
 
 
@@ -154,6 +155,35 @@ def test_make_subprocess_output_error__non_ascii_line():
     assert actual == expected, u'actual: {}'.format(actual)
 
 
+@pytest.mark.parametrize(
+    ('stdout_only', 'expected'),
+    [
+        (True, ("out\n", "out\r\n")),
+        (False, ("out\nerr\n", "out\r\nerr\r\n", "err\nout\n", "err\r\nout\r\n")),
+    ],
+)
+def test_call_subprocess_stdout_only(capfd, monkeypatch, stdout_only, expected):
+    log = []
+    monkeypatch.setattr(subprocess_logger, "debug", lambda *args: log.append(args[0]))
+    out = call_subprocess(
+        [
+            sys.executable,
+            "-c",
+            "import sys; "
+            "sys.stdout.write('out\\n'); "
+            "sys.stderr.write('err\\n')"
+        ],
+        stdout_only=stdout_only,
+    )
+    assert out in expected
+    captured = capfd.readouterr()
+    assert captured.err == ""
+    assert (
+        log == ["Running command %s", "out", "err"]
+        or log == ["Running command %s", "err", "out"]
+    )
+
+
 class FakeSpinner(SpinnerInterface):
 
     def __init__(self):
@@ -276,7 +306,7 @@ class TestCallSubprocess(object):
         command = 'print("Hello"); print("world"); exit("fail")'
         args, spinner = self.prepare_call(caplog, log_level, command=command)
 
-        with pytest.raises(InstallationError) as exc:
+        with pytest.raises(InstallationSubprocessError) as exc:
             call_subprocess(args, spinner=spinner)
         result = None
         exc_message = str(exc.value)
@@ -360,7 +390,7 @@ class TestCallSubprocess(object):
             # log level is only WARNING.
             (0, True, None, WARNING, (None, 'done', 2)),
             # Test a non-zero exit status.
-            (3, False, None, INFO, (InstallationError, 'error', 2)),
+            (3, False, None, INFO, (InstallationSubprocessError, 'error', 2)),
             # Test a non-zero exit status also in extra_ok_returncodes.
             (3, False, (3, ), INFO, (None, 'done', 2)),
     ])
@@ -396,7 +426,7 @@ class TestCallSubprocess(object):
         assert spinner.spin_count == expected_spin_count
 
     def test_closes_stdin(self):
-        with pytest.raises(InstallationError):
+        with pytest.raises(InstallationSubprocessError):
             call_subprocess(
                 [sys.executable, '-c', 'input()'],
                 show_stdout=True,
