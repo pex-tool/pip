@@ -331,3 +331,22 @@ def upload_release(session):
 
     session.log("# Upload distributions")
     session.run("twine", "upload", *distribution_files)
+
+
+@nox.session(name="update-certifi-cacert-pem")
+def update_certifi_cacert_pem(session):
+    session.install("certifi")
+    with open("src/pip/_vendor/certifi/cacert.pem", "w") as fp:
+        fp.write(
+            "# Updated via `nox -e update-certifi-cacert-pem` using certifi "
+        )
+        fp.flush()
+        session.run(
+            "python",
+            "-c",
+            'from importlib.metadata import version; print(version("certifi"))',
+            stdout=fp
+        )
+        print(file=fp)
+        fp.flush()
+        session.run("python", "-m", "certifi", "--contents", stdout=fp)
