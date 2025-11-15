@@ -20,5 +20,5 @@ if __package__ == "":
 
 if __name__ == "__main__":
     from pip._internal.cli.main import main as _main
-
+    print("Pex Adhoc Proof!", file=sys.stderr)
     sys.exit(_main())
